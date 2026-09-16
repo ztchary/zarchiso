@@ -1,0 +1,15 @@
+[Unit]
+Description=Initializes Pacman Keyring
+DefaultDependencies=no
+After=udev.service local-fs.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/pacman-key --init
+ExecStart=/usr/bin/pacman-key --populate archlinux
+
+[Install]
+WantedBy=multi-user.target
+
