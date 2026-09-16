@@ -1,15 +1,1 @@
-set -o vi
-shopt -s cdspell autocd histappend
-bind 'set bell-style none'
-. /usr/share/bash-completion/bash_completion
-
-PS1='\e[96m\h\e[95m$PWD\e[92m $?\e[m\n$ '
-
-export EDITOR='vim'
-export MAKEFLAGS="-j$(nproc)"
-
-alias ls='ls --color=auto'
-alias grep='grep --color=auto'
-
-clear
-
+/etc/skel/.bash_profile

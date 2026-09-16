@@ -1,5 +1,6 @@
 #!/bin/bash
 set -eo pipefail
+shopt -s dotglob
 
 zp() { printf '\e[96m%s\e[m\n' "$1"; }
 
@@ -13,24 +14,28 @@ lsblk -dinpro NAME,SIZE | while read -r name size; do
 	echo -e "$((++i)). $name\t$size"
 done
 
-read -rp "> " i < /dev/tty
-if (( i > ${#blks[@]} || i < 1 )); then
-	echo "bye"
-	exit 1
-fi
+read -rp "> " i
+if (( i > ${#blks[@]} || i < 1 )); then exit 1; fi
 
 dev="${blks[i-1]}"
 
-read -rp "username: " username < /dev/tty
-read -rsp "password: " password < /dev/tty
+read -rp "username: " username
+[ -z "$username" ] && exit 1
+read -rsp "password: " password
 echo
-read -rp "timezone: " timezone < /dev/tty
-read -rp "hostname: " hostname < /dev/tty
-read -n 1 -rp "copy iso iwd? [y/N] " cpiwd < /dev/tty
-echo
+[ -z "$password" ] && exit 1
+read -rp "timezone: " timezone
+[ -z "$timezone" ] && exit 1
+read -rp "hostname: " hostname
+[ -z "$hostname" ] && exit 1
+read -rp "extra packages: " packages
+read -rp "copy iso iwd? [y/N]: " cpiwd
+read -rp "continue? [y/N]: " confirm
+
+[[ ! "$confirm" =~ ^[yY](es)?$ ]] && exit 1
 
 zp "writing partitions"
-wipefs -af "$dev"
+wipefs -a "$dev"
 printf "label: gpt\n,1G,U\n,,L\n" | sfdisk -f "$dev"
 sync
 
@@ -44,7 +49,7 @@ mount -v "${parts[1]}" /mnt
 mount -v "${parts[0]}" /mnt/boot/efi --mkdir
 
 zp "pacstrap"
-pacstrap -K /mnt base base-devel linux linux-firmware git vim openssh iwd $packages
+pacstrap -K /mnt base base-devel linux linux-firmware bash-completion git vim openssh iwd $packages
 
 zp "fstab"
 genfstab -U /mnt | tee /mnt/etc/fstab
@@ -56,23 +61,28 @@ echo "root=UUID=$uuid rw" | tee /mnt/etc/kernel/cmdline
 zp "make user"
 sed -i '/%w.*) A/s/# //' /mnt/etc/sudoers
 useradd -m -G wheel -s /bin/bash -R /mnt "$username"
+cp -v /etc/skel/* "/mnt/home/$username"
 passwd6=$(openssl passwd -6 "$password")
 echo "$username:$passwd6" | chpasswd -e -R /mnt
-if [[ "yY" == *"$cpiwd"* ]]; then
-	zp "iwd"
-	mkdir -p /mnt/etc/iwd /mnt/var/lib/iwd
-	cp -r /var/lib/iwd/* /mnt/var/lib/iwd
+
+if [[ "$cpiwd" =~ ^[yY](es)?$ ]]; then
+	zp "copy iwd"
+	mkdir -pv /mnt/var/lib/iwd
+	cp -rv /var/lib/iwd/* /mnt/var/lib/iwd
 fi
 
 zp "misc nonsense"
-echo -e "[General]\nEnableNetworkConfiguration=true" | tee /mnt/etc/iwd/main.conf
-echo -e "KEYMAP=us\nFONT=default8x16" | tee /mnt/etc/vconsole.conf
+mkdir -pv /mnt/etc/systemd/network
+mkdir -pv /mnt/etc/iwd
+cp -v /etc/iwd/main.conf /mnt/etc/iwd/main.conf
+cp -v /etc/systemd/network/ethernet.network /mnt/etc/systemd/network/ethernet.network
+cp -v /etc/resolv.conf /mnt/etc/resolv.conf
+cp -v /etc/vconsole.conf /mnt/etc/vconsole.conf
 echo "en_US.UTF-8 UTF-8" | tee /mnt/etc/locale.gen
 echo "$hostname" | tee /mnt/etc/hostname
-cp /etc/resolv.conf /mnt/etc/resolv.conf
-sed -i '/\[multilib\]/{N;s/#//g;}' /etc/pacman.conf
 ln -svf "/usr/share/zoneinfo/$timezone" /mnt/etc/localtime
-arch-chroot /mnt /usr/bin/locale-gen
+arch-chroot /mnt locale-gen
+arch-chroot /mnt systemctl enable iwd.service systemd-networkd.service
 
 zp "uki"
 cat << EOF | tee /mnt/etc/mkinitcpio.d/linux.preset
@@ -80,7 +90,7 @@ ALL_kver="/boot/vmlinuz-linux"
 PRESETS=('default')
 default_uki="/boot/efi/EFI/BOOT/BOOTX64.EFI"
 EOF
-mkdir -p /mnt/boot/efi/EFI/BOOT
+mkdir -pv /mnt/boot/efi/EFI/BOOT
 arch-chroot /mnt /usr/bin/mkinitcpio -P
 
 zp "unmount"
