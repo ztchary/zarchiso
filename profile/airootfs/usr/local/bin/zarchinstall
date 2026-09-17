@@ -28,9 +28,12 @@ read -rp "timezone: " timezone
 [ -z "$timezone" ] && exit 1
 read -rp "hostname: " hostname
 [ -z "$hostname" ] && exit 1
+read -rp "kernel (default linux): " kernel
+kernel="${kernel:-linux}"
 read -rp "extra packages: " packages
 read -rp "copy iso iwd? [y/N]: " cpiwd
 read -rp "continue? [y/N]: " confirm
+
 
 [[ ! "$confirm" =~ ^[yY](es)?$ ]] && exit 1
 
@@ -49,7 +52,7 @@ mount -v "${parts[1]}" /mnt
 mount -v "${parts[0]}" /mnt/boot/efi --mkdir
 
 zp "pacstrap"
-pacstrap -K /mnt base base-devel linux linux-firmware bash-completion git vim openssh iwd $packages
+pacstrap -K /mnt base base-devel $kernel linux-firmware bash-completion git vim openssh iwd $packages
 
 zp "fstab"
 genfstab -U /mnt | tee /mnt/etc/fstab
@@ -85,8 +88,8 @@ arch-chroot /mnt locale-gen
 arch-chroot /mnt systemctl enable iwd.service systemd-networkd.service
 
 zp "uki"
-cat << EOF | tee /mnt/etc/mkinitcpio.d/linux.preset
-ALL_kver="/boot/vmlinuz-linux"
+cat << EOF | tee /mnt/etc/mkinitcpio.d/$kernel.preset
+ALL_kver="/boot/vmlinuz-$kernel"
 PRESETS=('default')
 default_uki="/boot/efi/EFI/BOOT/BOOTX64.EFI"
 EOF
