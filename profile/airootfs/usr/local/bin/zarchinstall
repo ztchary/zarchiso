@@ -49,17 +49,13 @@ mkfs.ext4 -F "${parts[1]}"
 
 zp "mounting partitions"
 mount -v "${parts[1]}" /mnt
-mount -v "${parts[0]}" /mnt/boot/efi --mkdir
+mount -v "${parts[0]}" /mnt/boot --mkdir
 
 zp "pacstrap"
 pacstrap -K /mnt base base-devel $kernel linux-firmware bash-completion git vim openssh iwd $packages
 
 zp "fstab"
 genfstab -U /mnt | tee /mnt/etc/fstab
-
-zp "cmdline"
-uuid=$(blkid -s UUID -o value "${parts[1]}")
-echo "root=UUID=$uuid rw" | tee /mnt/etc/kernel/cmdline
 
 zp "make user"
 sed -i '/%w.*) A/s/# //' /mnt/etc/sudoers
@@ -81,20 +77,32 @@ cp -v /etc/iwd/main.conf /mnt/etc/iwd/main.conf
 cp -v /etc/systemd/network/ethernet.network /mnt/etc/systemd/network/ethernet.network
 cp -v /etc/resolv.conf /mnt/etc/resolv.conf
 cp -v /etc/vconsole.conf /mnt/etc/vconsole.conf
+cp -v /etc/os-release /mnt/etc/os-release
+cp -v /etc/pacman.conf /mnt/etc/pacman.conf
 echo "en_US.UTF-8 UTF-8" | tee /mnt/etc/locale.gen
 echo "$hostname" | tee /mnt/etc/hostname
 ln -svf "/usr/share/zoneinfo/$timezone" /mnt/etc/localtime
 arch-chroot /mnt locale-gen
 arch-chroot /mnt systemctl enable iwd.service systemd-networkd.service
 
-zp "uki"
-cat << EOF | tee /mnt/etc/mkinitcpio.d/$kernel.preset
-ALL_kver="/boot/vmlinuz-$kernel"
-PRESETS=('default')
-default_uki="/boot/efi/EFI/BOOT/BOOTX64.EFI"
-EOF
-mkdir -pv /mnt/boot/efi/EFI/BOOT
+zp "bootloader"
+uuid=$(blkid -s UUID -o value "${parts[1]}")
 arch-chroot /mnt /usr/bin/mkinitcpio -P
+arch-chroot /mnt bootctl install
+
+cat << EOF | tee /mnt/boot/loader/loader.conf
+default zarch.conf
+timeout 0
+console-mode max
+editor yes
+EOF
+
+cat << EOF | tee /mnt/boot/loader/entries/zarch.conf
+title zarch
+linux /vmlinuz-$kernel
+initrd /initramfs-$kernel.img
+options root=UUID=$uuid rw
+EOF
 
 zp "unmount"
 umount -R /mnt

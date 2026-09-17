@@ -6,10 +6,9 @@ e2fsprogs
 iproute2
 iwd
 less
-linux-firmware-realtek
+linux-firmware
 linux-lts
 mkinitcpio-archiso
-pacman-mirrorlist
 pv
 syslinux
 util-linux
