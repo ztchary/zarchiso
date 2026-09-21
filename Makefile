@@ -1,11 +1,9 @@
-UUID := $(shell uuidgen)
-
 .PHONY: all iso
 all: clean iso
 
 iso:
-	mkdir -p /tmp/mkarchiso-$(UUID)
-	mkarchiso -v -w /tmp/mkarchiso-$(UUID) -o . profile
+	mkdir -p /tmp/mkarchiso
+	mkarchiso -v -r -w /tmp/mkarchiso -o . profile
 
 clean:
 	rm -f *.iso
